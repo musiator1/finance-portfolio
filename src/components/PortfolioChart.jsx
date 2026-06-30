@@ -85,9 +85,11 @@ export default function PortfolioChart({ refreshTrigger }) {
           const json = await res.json()
           const formattedData = {};
           // Zapisujemy daty bez godzin
-          json.forEach(day => {
+        json.forEach(day => {
+        if (day.close != null) {
             formattedData[day.date.split('T')[0]] = day.close
-          })
+        }
+        })
           
           apiCache[cacheKey] = formattedData;
           marketData[ticker] = formattedData;
@@ -117,23 +119,32 @@ export default function PortfolioChart({ refreshTrigger }) {
       }
 
       // 2. Szukamy dokładnego dopasowania (działa idealnie dla interwału 'daily')
-      if (marketData[lookupKey][targetDateStr]) {
-        lastKnownPrices[lookupKey] = marketData[lookupKey][targetDateStr]
-        return marketData[lookupKey][targetDateStr]
+      const exactPrice = marketData[lookupKey][targetDateStr]
+
+      if (exactPrice != null) {
+        lastKnownPrices[lookupKey] = exactPrice
+        return exactPrice
       }
 
       // 3. NAPRAWA ROZJAZDU DAT: Szukamy najbliższej wcześniejszej daty w pobranych
       // (Dzięki temu, jeśli aplikacja szuka 15 marca, a Yahoo dało datę 1 marca, to ją znajdzie)
       const availableDates = Object.keys(marketData[lookupKey]).sort();
-      let bestDate = null;
+
+      let bestPrice = null;
+
       for (const d of availableDates) {
-        if (d <= targetDateStr) bestDate = d;
-        else break; // Daty są posortowane, jeśli trafiliśmy na późniejszą, przerywamy
+        if (d > targetDateStr) break;
+
+        const price = marketData[lookupKey][d];
+
+        if (price != null) {
+          bestPrice = price;
+        }
       }
 
-      if (bestDate) {
-         lastKnownPrices[lookupKey] = marketData[lookupKey][bestDate];
-         return marketData[lookupKey][bestDate];
+      if (bestPrice != null) {
+        lastKnownPrices[lookupKey] = bestPrice;
+        return bestPrice;
       }
 
       return lastKnownPrices[lookupKey] || 0
