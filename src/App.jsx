@@ -5,35 +5,40 @@ import PortfolioChart from './components/PortfolioChart'
 
 function App() {
   const [activeTab, setActiveTab] = useState('portfolio')
-  // Stan służący do wymuszania odświeżenia listy i wykresu po dodaniu transakcji
   const [refreshList, setRefreshList] = useState(0) 
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans p-4 md:p-8">
+    <div className="min-h-screen bg-[#1e1e2f] text-white font-sans p-4 md:p-8 selection:bg-[#1f8ef1] selection:text-white">
       <div className="max-w-6xl mx-auto">
         
-        <header className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
-          <h1 className="text-3xl font-bold text-slate-800 tracking-tight">
-            Dashboard Inwestycyjny
-          </h1>
+        <header className="flex flex-col md:flex-row justify-between items-center mb-8 gap-6">
+          <div>
+            <h1 className="text-3xl font-light text-[#9a9a9a] tracking-wide mb-1">
+              Portfel inwestycyjny
+            </h1>
+            <h2 className="text-4xl font-normal text-white tracking-tight">
+              Kokpit
+            </h2>
+          </div>
           
-          <div className="flex bg-white rounded-lg shadow-sm p-1 border border-slate-200">
+          {/* Grupa przycisków na wzór tych z prawego górnego rogu obrazka */}
+          <div className="flex rounded border border-[#fd5d93] overflow-hidden">
             <button
               onClick={() => setActiveTab('portfolio')}
-              className={`px-6 py-2 rounded-md font-medium transition-all duration-200 ${
+              className={`cursor-pointer px-6 py-1.5 text-sm font-semibold transition-colors duration-200 ${
                 activeTab === 'portfolio' 
-                  ? 'bg-blue-600 text-white shadow' 
-                  : 'text-slate-600 hover:bg-slate-100'
+                  ? 'bg-[#fd5d93] text-white' 
+                  : 'bg-transparent text-[#fd5d93] hover:bg-[#fd5d93]/10'
               }`}
             >
-              Portfel (Historia)
+              Portfolio
             </button>
             <button
               onClick={() => setActiveTab('gem')}
-              className={`px-6 py-2 rounded-md font-medium transition-all duration-200 ${
+              className={`cursor-pointer px-6 py-1.5 text-sm font-semibold border-l border-[#fd5d93] transition-colors duration-200 ${
                 activeTab === 'gem' 
-                  ? 'bg-blue-600 text-white shadow' 
-                  : 'text-slate-600 hover:bg-slate-100'
+                  ? 'bg-[#fd5d93] text-white' 
+                  : 'bg-transparent text-[#fd5d93] hover:bg-[#fd5d93]/10'
               }`}
             >
               Strategia GEM
@@ -41,26 +46,19 @@ function App() {
           </div>
         </header>
 
-        <main className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 min-h-[600px]">
+        <main className="min-h-[600px]">
           {activeTab === 'portfolio' ? (
-            <div>
-              <h2 className="text-2xl font-bold mb-6">Mój Portfel</h2>
-              
-              {/* Wykres wpłaconego kapitału */}
+            <div className="animate-in fade-in duration-300">
               <PortfolioChart refreshTrigger={refreshList} />
-              
-              {/* Formularz dodawania transakcji */}
               <TransactionForm onTransactionAdded={() => setRefreshList(prev => prev + 1)} />
-              
-              {/* Tabela historii transakcji */}
               <TransactionList refreshTrigger={refreshList} />
-              
             </div>
           ) : (
-            <div>
-              <h2 className="text-2xl font-bold mb-6">System Sygnałów GEM</h2>
-              <div className="flex items-center justify-center h-64 bg-slate-50 rounded-xl border border-dashed border-slate-300">
-                <p className="text-slate-500">Tutaj wstawimy wskaźniki ETF i moduł momentum.</p>
+            <div className="animate-in fade-in duration-300 bg-[#27293d] rounded-xl p-8 shadow-lg">
+              <h2 className="text-2xl font-light mb-6 text-white">System Sygnałów GEM</h2>
+              <div className="flex flex-col items-center justify-center h-80 bg-[#1e1e2f] rounded-lg">
+                <div className="text-[#1f8ef1] mb-4 text-4xl">⚙️</div>
+                <p className="text-[#9a9a9a] font-medium">Moduł momentum i wskaźniki ETF w przygotowaniu...</p>
               </div>
             </div>
           )}

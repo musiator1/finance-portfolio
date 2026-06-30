@@ -5,7 +5,6 @@ export default function TransactionList({ refreshTrigger }) {
   const [transactions, setTransactions] = useState([])
   const [loading, setLoading] = useState(true)
   
-  // Stany do obsługi edycji
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm] = useState({})
 
@@ -20,28 +19,18 @@ export default function TransactionList({ refreshTrigger }) {
       .select('*')
       .order('transaction_date', { ascending: false })
 
-    if (error) {
-      console.error('Błąd pobierania:', error)
-    } else {
-      setTransactions(data)
-    }
+    if (error) console.error('Błąd pobierania:', error)
+    else setTransactions(data)
     setLoading(false)
   }
 
-  // --- FUNKCJA USUWANIA ---
   const handleDelete = async (id) => {
     if (!window.confirm('Czy na pewno chcesz usunąć tę transakcję?')) return
-
     const { error } = await supabase.from('transactions').delete().eq('id', id)
-    
-    if (error) {
-      alert('Błąd podczas usuwania: ' + error.message)
-    } else {
-      fetchTransactions() // Odśwież listę po usunięciu
-    }
+    if (error) alert('Błąd podczas usuwania: ' + error.message)
+    else fetchTransactions() 
   }
 
-  // --- FUNKCJE EDYCJI ---
   const startEdit = (t) => {
     setEditingId(t.id)
     setEditForm({
@@ -78,88 +67,99 @@ export default function TransactionList({ refreshTrigger }) {
     if (error) {
       alert('Błąd podczas zapisu edycji: ' + error.message)
     } else {
-      setEditingId(null) // Wyjdź z trybu edycji
-      fetchTransactions() // Odśwież listę z nowymi danymi
+      setEditingId(null)
+      fetchTransactions() 
     }
   }
 
-  if (loading) return <p className="text-slate-500 mt-8">Ładowanie transakcji...</p>
+  if (loading) return <p className="text-[#1f8ef1] font-light mt-4 pl-4">Loading data...</p>
 
   if (transactions.length === 0) {
-    return <p className="text-slate-500 mt-8">Brak transakcji w bazie. Dodaj pierwszą powyżej!</p>
+    return <p className="text-[#9a9a9a] mt-6 p-6 bg-[#27293d] rounded-xl text-center font-light shadow-lg">Nie znaleziono transakcji.</p>
   }
 
+  const editInputClass = "w-full p-1.5 border-b border-[#1f8ef1] bg-[#1e1e2f] text-white outline-none text-sm font-light rounded-t"
+
   return (
-    <div className="overflow-x-auto mt-8 bg-white border border-slate-200 rounded-xl shadow-sm">
-      <div className="p-6 border-b border-slate-200">
-        <h3 className="text-lg font-semibold text-slate-800">Historia transakcji</h3>
+    <div className="overflow-x-auto bg-[#27293d] rounded-xl shadow-lg mt-6">
+      <div className="p-5 flex justify-between items-center">
+        <h3 className="text-lg font-light text-white">Operacje</h3>
+        <span className="text-[#9a9a9a] text-xs font-medium">
+          Total: {transactions.length}
+        </span>
       </div>
       <table className="w-full text-left border-collapse min-w-[800px]">
         <thead>
-          <tr className="bg-slate-50 text-slate-600 text-sm border-b border-slate-200">
-            <th className="p-3 font-medium">Data</th>
-            <th className="p-3 font-medium">Aktywo (Ticker)</th>
-            <th className="p-3 font-medium">Typ</th>
-            <th className="p-3 font-medium">Ilość</th>
-            <th className="p-3 font-medium">Cena/szt</th>
-            <th className="p-3 font-medium">Kurs PLN</th>
-            <th className="p-3 font-medium">Wartość PLN</th>
-            <th className="p-3 font-medium text-center">Akcje</th>
+          <tr className="text-[#9a9a9a] text-xs font-light border-y border-[#1e1e2f]">
+            <th className="p-4 font-normal">Data</th>
+            <th className="p-4 font-normal">Nazwa</th>
+            <th className="p-4 font-normal">Typ</th>
+            <th className="p-4 font-normal">Ilość</th>
+            <th className="p-4 font-normal">Cena</th>
+            <th className="p-4 font-normal">Kurs wymiany</th>
+            <th className="p-4 font-normal">Wartość (PLN)</th>
+            <th className="p-4 font-normal text-right pr-6">Akcje</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-[#1e1e2f]">
           {transactions.map((t) => {
             const isEditing = editingId === t.id
 
             return isEditing ? (
-              // --- WIDOK EDYCJI ---
-              <tr key={t.id} className="border-b border-slate-100 bg-blue-50/50">
-                <td className="p-2"><input type="date" name="transaction_date" value={editForm.transaction_date} onChange={handleEditChange} className="w-full p-1 border rounded text-sm" /></td>
-                <td className="p-2">
-                  <input type="text" name="ticker" value={editForm.ticker} onChange={handleEditChange} placeholder="Ticker" className="w-full p-1 border rounded text-sm mb-1 uppercase" />
-                  <input type="text" name="asset_name" value={editForm.asset_name} onChange={handleEditChange} placeholder="Nazwa" className="w-full p-1 border rounded text-sm" />
+              <tr key={t.id} className="bg-[#1e1e2f]/50">
+                <td className="p-3"><input type="date" name="transaction_date" value={editForm.transaction_date} onChange={handleEditChange} className={editInputClass} style={{ colorScheme: "dark" }} /></td>
+                <td className="p-3">
+                  <input type="text" name="ticker" value={editForm.ticker} onChange={handleEditChange} placeholder="Ticker" className={`${editInputClass} mb-1.5 uppercase font-medium`} />
+                  <input type="text" name="asset_name" value={editForm.asset_name} onChange={handleEditChange} placeholder="Nazwa" className={editInputClass} />
                 </td>
-                <td className="p-2">
-                  <select name="type" value={editForm.type} onChange={handleEditChange} className="w-full p-1 border rounded text-sm bg-white">
+                <td className="p-3">
+                  <select name="type" value={editForm.type} onChange={handleEditChange} className={`${editInputClass} cursor-pointer font-medium ${editForm.type === 'BUY' ? 'text-[#00f2c3]' : 'text-[#fd5d93]'}`}>
                     <option value="BUY">BUY</option>
                     <option value="SELL">SELL</option>
                   </select>
                 </td>
-                <td className="p-2"><input type="number" step="any" name="quantity" value={editForm.quantity} onChange={handleEditChange} className="w-full p-1 border rounded text-sm w-16" /></td>
-                <td className="p-2">
-                  <input type="number" step="any" name="price_per_share" value={editForm.price_per_share} onChange={handleEditChange} className="w-full p-1 border rounded text-sm mb-1 w-20" />
-                  <select name="asset_currency" value={editForm.asset_currency} onChange={handleEditChange} className="w-full p-1 border rounded text-sm bg-white">
+                <td className="p-3"><input type="number" step="any" name="quantity" value={editForm.quantity} onChange={handleEditChange} className={`${editInputClass} w-16`} /></td>
+                <td className="p-3">
+                  <input type="number" step="any" name="price_per_share" value={editForm.price_per_share} onChange={handleEditChange} className={`${editInputClass} mb-1.5 w-20`} />
+                  <select name="asset_currency" value={editForm.asset_currency} onChange={handleEditChange} className={`${editInputClass} cursor-pointer`}>
                     <option value="USD">USD</option><option value="EUR">EUR</option><option value="PLN">PLN</option>
                   </select>
                 </td>
-                <td className="p-2"><input type="number" step="any" name="exchange_rate_pln" value={editForm.exchange_rate_pln} onChange={handleEditChange} className="w-full p-1 border rounded text-sm w-20" /></td>
-                <td className="p-2 text-sm text-slate-500 italic">Auto</td>
-                <td className="p-2 text-center">
-                  <button onClick={() => saveEdit(t.id)} className="text-green-600 hover:text-green-800 text-sm font-medium mr-2">Zapisz</button>
-                  <button onClick={() => setEditingId(null)} className="text-slate-500 hover:text-slate-700 text-sm font-medium">Anuluj</button>
+                <td className="p-3"><input type="number" step="any" name="exchange_rate_pln" value={editForm.exchange_rate_pln} onChange={handleEditChange} className={`${editInputClass} w-16`} /></td>
+                <td className="p-3 text-sm text-[#9a9a9a] font-light">Auto</td>
+                <td className="p-3 pr-6 text-right">
+                  <div className="flex flex-col gap-2 items-end">
+                    <button onClick={() => saveEdit(t.id)} className="cursor-pointer text-[#00f2c3] hover:text-white text-xs font-semibold">Save</button>
+                    <button onClick={() => setEditingId(null)} className="cursor-pointer text-[#9a9a9a] hover:text-white text-xs font-semibold">Cancel</button>
+                  </div>
                 </td>
               </tr>
             ) : (
-              // --- WIDOK STANDARDOWY ---
-              <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                <td className="p-3 text-sm text-slate-700">{t.transaction_date}</td>
-                <td className="p-3 text-sm font-medium text-slate-900">
-                  {t.ticker} <span className="text-slate-500 text-xs font-normal">({t.asset_name})</span>
+              <tr key={t.id} className="hover:bg-[#1e1e2f] transition-colors group">
+                <td className="p-4 text-sm text-[#9a9a9a] font-light">{t.transaction_date}</td>
+                <td className="p-4 text-sm font-medium text-white">
+                  {t.ticker} <span className="text-[#9a9a9a] text-xs font-light ml-1">{t.asset_name}</span>
                 </td>
-                <td className="p-3 text-sm">
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${t.type === 'BUY' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                <td className="p-4 text-sm">
+                  <span className={`font-medium ${t.type === 'BUY' ? 'text-[#00f2c3]' : 'text-[#fd5d93]'}`}>
                     {t.type}
                   </span>
                 </td>
-                <td className="p-3 text-sm text-slate-700">{t.quantity}</td>
-                <td className="p-3 text-sm text-slate-700">{t.price_per_share} {t.asset_currency}</td>
-                <td className="p-3 text-sm text-slate-700">{t.exchange_rate_pln}</td>
-                <td className="p-3 text-sm font-semibold text-slate-800">
-                  {Number(t.total_value_pln).toFixed(2)} PLN
+                <td className="p-4 text-sm text-white font-light">{t.quantity}</td>
+                <td className="p-4 text-sm text-white font-light">{t.price_per_share} <span className="text-[#9a9a9a] text-xs">{t.asset_currency}</span></td>
+                <td className="p-4 text-sm text-[#9a9a9a] font-light">{t.exchange_rate_pln}</td>
+                <td className="p-4 text-sm font-normal text-white">
+                  {Number(t.total_value_pln).toLocaleString('pl-PL')}
                 </td>
-                <td className="p-3 text-sm text-center">
-                  <button onClick={() => startEdit(t)} className="text-blue-600 hover:text-blue-800 font-medium mr-3">Edytuj</button>
-                  <button onClick={() => handleDelete(t.id)} className="text-red-500 hover:text-red-700 font-medium">Usuń</button>
+                <td className="p-4 text-right pr-6">
+                  <div className="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => startEdit(t)} className="cursor-pointer text-[#1f8ef1] hover:text-white text-sm" title="Edit">
+                      ✎
+                    </button>
+                    <button onClick={() => handleDelete(t.id)} className="cursor-pointer text-[#fd5d93] hover:text-white text-sm" title="Delete">
+                      🗑️
+                    </button>
+                  </div>
                 </td>
               </tr>
             )
