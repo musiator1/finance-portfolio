@@ -61,7 +61,8 @@ export default function PortfolioChart({ refreshTrigger }) {
     const todayStr = today.toISOString().split('T')[0]
     if (dateArray[dateArray.length - 1] !== todayStr) dateArray.push(todayStr)
 
-    const uniqueTickers = [...new Set(data.map(t => t.ticker))]
+    // Filtrujemy tickery zaczynające się od CASH (np. CASH-USD), żeby nie uderzać do API Yahoo
+    const uniqueTickers = [...new Set(data.map(t => t.ticker))].filter(t => !t.startsWith('CASH'))
     const uniqueCurrencies = [...new Set(data.map(t => t.asset_currency))].filter(c => c !== 'PLN')
 
     const marketData = {} 
@@ -97,6 +98,9 @@ export default function PortfolioChart({ refreshTrigger }) {
     let lastKnownPrices = {} 
 
     const getPrice = (symbol, targetDateStr) => {
+      // Dla sztucznego aktywa gotówkowego cena zawsze wynosi 1 (FX zajmie się ewentualnym przewalutowaniem)
+      if (symbol.startsWith('CASH')) return 1;
+
       const lookupKey = symbol.length === 3 && !symbol.includes('=') && uniqueCurrencies.includes(symbol) ? `${symbol}PLN=X` : symbol;
       if (!marketData[lookupKey]) return lastKnownPrices[lookupKey] || 0;
       const exactPrice = marketData[lookupKey][targetDateStr]
@@ -123,14 +127,24 @@ export default function PortfolioChart({ refreshTrigger }) {
       while (txIndex < data.length && new Date(data[txIndex].transaction_date) <= targetDate) {
         const t = data[txIndex]
         const value = Number(t.total_value_pln)
+        
         if (!runningShares[t.ticker]) runningShares[t.ticker] = { shares: 0, currency: t.asset_currency }
+        
+        // NOWA LOGIKA BIZNESOWA:
         if (t.type === 'BUY') {
           currentCapital += value
           runningShares[t.ticker].shares += Number(t.quantity)
         } else if (t.type === 'SELL') {
           currentCapital -= value
           runningShares[t.ticker].shares -= Number(t.quantity)
+        } else if (t.type === 'DIVIDEND') {
+          // Dywidenda to wpływ gotówki bez podnoszenia kosztu inwestycji (zysk rośnie)
+          runningShares[t.ticker].shares += Number(t.quantity)
+        } else if (t.type === 'FEE') {
+          // Opłata to odpływ gotówki bez zmian we wpłaconym kapitale (zysk maleje)
+          runningShares[t.ticker].shares -= Number(t.quantity)
         }
+        
         txIndex++
       }
 
@@ -150,7 +164,7 @@ export default function PortfolioChart({ refreshTrigger }) {
       if (currentCapital === 0) dailyMarketValuePLN = 0
 
       return {
-        date: dateStr, // Tego użyjemy jako unikalnego ID osi X
+        date: dateStr,
         invested: currentCapital,
         marketValue: Number(dailyMarketValuePLN.toFixed(2)),
         profit: Number((dailyMarketValuePLN - currentCapital).toFixed(2))
@@ -285,14 +299,11 @@ export default function PortfolioChart({ refreshTrigger }) {
           </div>
           
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            {/* Duży, animowany przełącznik widoków (Kapitał / Zysk) */}
             <div className="flex rounded border border-[#1f8ef1] overflow-hidden">
               <button
                 onClick={() => setActiveView('value')}
                 className={`cursor-pointer px-5 py-2 text-sm font-semibold transition-colors duration-200 ${
-                  activeView === 'value' 
-                    ? 'bg-[#1f8ef1] text-white' 
-                    : 'bg-transparent text-[#1f8ef1] hover:bg-[#1f8ef1]/10'
+                  activeView === 'value' ? 'bg-[#1f8ef1] text-white' : 'bg-transparent text-[#1f8ef1] hover:bg-[#1f8ef1]/10'
                 }`}
               >
                 KAPITAŁ VS WARTOŚĆ
@@ -300,16 +311,13 @@ export default function PortfolioChart({ refreshTrigger }) {
               <button
                 onClick={() => setActiveView('profit')}
                 className={`cursor-pointer px-5 py-2 text-sm font-semibold border-l border-[#1f8ef1] transition-colors duration-200 ${
-                  activeView === 'profit' 
-                    ? 'bg-[#1f8ef1] text-white' 
-                    : 'bg-transparent text-[#1f8ef1] hover:bg-[#1f8ef1]/10'
+                  activeView === 'profit' ? 'bg-[#1f8ef1] text-white' : 'bg-transparent text-[#1f8ef1] hover:bg-[#1f8ef1]/10'
                 }`}
               >
                 TYLKO ZYSK
               </button>
             </div>
 
-            {/* Przełącznik interwału */}
             <div className="flex bg-[#1e1e2f] rounded p-1">
               <button onClick={() => setInterval('daily')} disabled={loading} className={`cursor-pointer px-4 py-1.5 text-xs rounded font-medium transition-colors ${ interval === 'daily' ? 'bg-[#fd5d93] text-white shadow' : 'text-[#9a9a9a] hover:text-white disabled:opacity-50' }`}>1D</button>
               <button onClick={() => setInterval('weekly')} disabled={loading} className={`cursor-pointer px-4 py-1.5 text-xs rounded font-medium transition-colors ${ interval === 'weekly' ? 'bg-[#fd5d93] text-white shadow' : 'text-[#9a9a9a] hover:text-white disabled:opacity-50' }`}>1W</button>
@@ -322,7 +330,6 @@ export default function PortfolioChart({ refreshTrigger }) {
           {loading && <div className="absolute inset-0 z-10 flex items-center justify-center font-light text-[#1f8ef1] bg-[#27293d]/50 rounded-xl">Aktualizowanie...</div>}
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              {/* KLUCZOWA ZMIANA: dataKey to teraz unikalna "date", a tickFormatter robi magię z miesiącami */}
               <XAxis 
                 dataKey="date" 
                 tickFormatter={(dateStr) => {

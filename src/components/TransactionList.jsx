@@ -40,6 +40,7 @@ export default function TransactionList({ refreshTrigger }) {
       type: t.type,
       quantity: t.quantity,
       price_per_share: t.price_per_share,
+      commission: t.commission || 0,
       asset_currency: t.asset_currency,
       exchange_rate_pln: t.exchange_rate_pln
     })
@@ -59,6 +60,7 @@ export default function TransactionList({ refreshTrigger }) {
         type: editForm.type,
         quantity: parseFloat(editForm.quantity),
         price_per_share: parseFloat(editForm.price_per_share),
+        commission: parseFloat(editForm.commission) || 0,
         asset_currency: editForm.asset_currency,
         exchange_rate_pln: parseFloat(editForm.exchange_rate_pln)
       })
@@ -72,32 +74,44 @@ export default function TransactionList({ refreshTrigger }) {
     }
   }
 
-  if (loading) return <p className="text-[#1f8ef1] font-light mt-4 pl-4">Loading data...</p>
+  if (loading) return <p className="text-[#1f8ef1] font-light mt-4 pl-4">Pobieranie danych...</p>
 
   if (transactions.length === 0) {
-    return <p className="text-[#9a9a9a] mt-6 p-6 bg-[#27293d] rounded-xl text-center font-light shadow-lg">Nie znaleziono transakcji.</p>
+    return <p className="text-[#9a9a9a] mt-6 p-6 bg-[#27293d] rounded-xl text-center font-light shadow-lg">Brak transakcji w bazie. Dodaj pierwszą powyżej!</p>
   }
 
   const editInputClass = "w-full p-1.5 border-b border-[#1f8ef1] bg-[#1e1e2f] text-white outline-none text-sm font-light rounded-t"
 
+  // Funkcja pomocnicza do kolorowania typów
+  const getTypeColor = (type) => {
+    switch(type) {
+      case 'BUY': return 'text-[#00f2c3]'
+      case 'SELL': return 'text-[#fd5d93]'
+      case 'DIVIDEND': return 'text-[#1f8ef1]'
+      case 'FEE': return 'text-[#ffb236]' // Pomarańczowy dla opłat
+      default: return 'text-white'
+    }
+  }
+
   return (
     <div className="overflow-x-auto bg-[#27293d] rounded-xl shadow-lg mt-6">
       <div className="p-5 flex justify-between items-center">
-        <h3 className="text-lg font-light text-white">Operacje</h3>
+        <h3 className="text-lg font-light text-white">Historia transakcji</h3>
         <span className="text-[#9a9a9a] text-xs font-medium">
-          Total: {transactions.length}
+          Liczba wpisów: {transactions.length}
         </span>
       </div>
-      <table className="w-full text-left border-collapse min-w-[800px]">
+      <table className="w-full text-left border-collapse min-w-[1000px]">
         <thead>
-          <tr className="text-[#9a9a9a] text-xs font-light border-y border-[#1e1e2f]">
+          <tr className="text-[#9a9a9a] text-xs font-light border-y border-[#1e1e2f] uppercase tracking-wider">
             <th className="p-4 font-normal">Data</th>
-            <th className="p-4 font-normal">Nazwa</th>
+            <th className="p-4 font-normal">Aktywo</th>
             <th className="p-4 font-normal">Typ</th>
             <th className="p-4 font-normal">Ilość</th>
-            <th className="p-4 font-normal">Cena</th>
-            <th className="p-4 font-normal">Kurs wymiany</th>
-            <th className="p-4 font-normal">Wartość (PLN)</th>
+            <th className="p-4 font-normal">Cena/szt</th>
+            <th className="p-4 font-normal text-right">Prow.</th>
+            <th className="p-4 font-normal">Kurs PLN</th>
+            <th className="p-4 font-normal text-right">Wartość (PLN)</th>
             <th className="p-4 font-normal text-right pr-6">Akcje</th>
           </tr>
         </thead>
@@ -113,9 +127,11 @@ export default function TransactionList({ refreshTrigger }) {
                   <input type="text" name="asset_name" value={editForm.asset_name} onChange={handleEditChange} placeholder="Nazwa" className={editInputClass} />
                 </td>
                 <td className="p-3">
-                  <select name="type" value={editForm.type} onChange={handleEditChange} className={`${editInputClass} cursor-pointer font-medium ${editForm.type === 'BUY' ? 'text-[#00f2c3]' : 'text-[#fd5d93]'}`}>
+                  <select name="type" value={editForm.type} onChange={handleEditChange} className={`${editInputClass} cursor-pointer font-medium text-[#1f8ef1]`}>
                     <option value="BUY">BUY</option>
                     <option value="SELL">SELL</option>
+                    <option value="DIVIDEND">DIVIDEND</option>
+                    <option value="FEE">FEE</option>
                   </select>
                 </td>
                 <td className="p-3"><input type="number" step="any" name="quantity" value={editForm.quantity} onChange={handleEditChange} className={`${editInputClass} w-16`} /></td>
@@ -125,38 +141,40 @@ export default function TransactionList({ refreshTrigger }) {
                     <option value="USD">USD</option><option value="EUR">EUR</option><option value="PLN">PLN</option>
                   </select>
                 </td>
+                <td className="p-3 text-right"><input type="number" step="any" name="commission" value={editForm.commission} onChange={handleEditChange} className={`${editInputClass} w-16 text-right`} /></td>
                 <td className="p-3"><input type="number" step="any" name="exchange_rate_pln" value={editForm.exchange_rate_pln} onChange={handleEditChange} className={`${editInputClass} w-16`} /></td>
-                <td className="p-3 text-sm text-[#9a9a9a] font-light">Auto</td>
+                <td className="p-3 text-sm text-[#9a9a9a] font-light text-right">Auto</td>
                 <td className="p-3 pr-6 text-right">
                   <div className="flex flex-col gap-2 items-end">
-                    <button onClick={() => saveEdit(t.id)} className="cursor-pointer text-[#00f2c3] hover:text-white text-xs font-semibold">Save</button>
-                    <button onClick={() => setEditingId(null)} className="cursor-pointer text-[#9a9a9a] hover:text-white text-xs font-semibold">Cancel</button>
+                    <button onClick={() => saveEdit(t.id)} className="cursor-pointer text-[#00f2c3] hover:text-white text-xs font-semibold">Zapisz</button>
+                    <button onClick={() => setEditingId(null)} className="cursor-pointer text-[#9a9a9a] hover:text-white text-xs font-semibold">Anuluj</button>
                   </div>
                 </td>
               </tr>
             ) : (
               <tr key={t.id} className="hover:bg-[#1e1e2f] transition-colors group">
-                <td className="p-4 text-sm text-[#9a9a9a] font-light">{t.transaction_date}</td>
+                <td className="p-4 text-sm text-[#9a9a9a] font-light whitespace-nowrap">{t.transaction_date}</td>
                 <td className="p-4 text-sm font-medium text-white">
                   {t.ticker} <span className="text-[#9a9a9a] text-xs font-light ml-1">{t.asset_name}</span>
                 </td>
                 <td className="p-4 text-sm">
-                  <span className={`font-medium ${t.type === 'BUY' ? 'text-[#00f2c3]' : 'text-[#fd5d93]'}`}>
+                  <span className={`font-medium ${getTypeColor(t.type)}`}>
                     {t.type}
                   </span>
                 </td>
                 <td className="p-4 text-sm text-white font-light">{t.quantity}</td>
                 <td className="p-4 text-sm text-white font-light">{t.price_per_share} <span className="text-[#9a9a9a] text-xs">{t.asset_currency}</span></td>
+                <td className="p-4 text-sm text-[#9a9a9a] font-light text-right">{t.commission}</td>
                 <td className="p-4 text-sm text-[#9a9a9a] font-light">{t.exchange_rate_pln}</td>
-                <td className="p-4 text-sm font-normal text-white">
+                <td className="p-4 text-sm font-normal text-white text-right whitespace-nowrap">
                   {Number(t.total_value_pln).toLocaleString('pl-PL')}
                 </td>
-                <td className="p-4 text-right pr-6">
+                <td className="p-4 text-right pr-6 min-w-[80px]">
                   <div className="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => startEdit(t)} className="cursor-pointer text-[#1f8ef1] hover:text-white text-sm" title="Edit">
+                    <button onClick={() => startEdit(t)} className="cursor-pointer text-[#1f8ef1] hover:text-white text-sm" title="Edytuj">
                       ✎
                     </button>
-                    <button onClick={() => handleDelete(t.id)} className="cursor-pointer text-[#fd5d93] hover:text-white text-sm" title="Delete">
+                    <button onClick={() => handleDelete(t.id)} className="cursor-pointer text-[#fd5d93] hover:text-white text-sm" title="Usuń">
                       🗑️
                     </button>
                   </div>
