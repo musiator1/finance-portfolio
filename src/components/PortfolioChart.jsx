@@ -10,7 +10,7 @@ const apiCache = {};
 export default function PortfolioChart({ refreshTrigger }) {
   const [chartData, setChartData] = useState([])
   const [activeView, setActiveView] = useState('value')
-  const [interval, setInterval] = useState('monthly')
+  const [interval, setInterval] = useState('weekly')
   const [loading, setLoading] = useState(false)
   
   const [financialGoal, setFinancialGoal] = useState(() => {
@@ -337,7 +337,7 @@ export default function PortfolioChart({ refreshTrigger }) {
                 tickLine={false} 
               />
               <YAxis tick={{fontSize: 11, fill: '#9a9a9a'}} stroke="#2b2b40" tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`} width={60} axisLine={false} tickLine={false} />
-              <CartesianGrid strokeDasharray="0" vertical={true} horizontal={false} stroke="#2b2b40" />
+              <CartesianGrid strokeDasharray="3 3" vertical={true} horizontal={true} stroke="#414868" strokeOpacity={0.6} />
               <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#2b2b40', strokeWidth: 1, strokeDasharray: '4 4' }} />
               <Legend wrapperStyle={{ paddingTop: '10px' }} iconType="circle" />
 
