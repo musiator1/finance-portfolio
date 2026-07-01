@@ -159,7 +159,7 @@ export default function GemModule() {
             value={newTicker}
             onChange={(e) => setNewTicker(e.target.value)}
             placeholder="Dodaj ticker (np. QQQ)"
-            className="bg-transparent p-2 text-sm text-white outline-none w-36 uppercase"
+            className="bg-transparent p-2 text-sm text-white outline-none w-50 uppercase"
           />
           <button type="submit" disabled={fetchingTickers} className="bg-[#fd5d93] text-white px-4 text-sm font-semibold cursor-pointer hover:bg-[#e04a7c] transition-colors disabled:opacity-50">
             +
