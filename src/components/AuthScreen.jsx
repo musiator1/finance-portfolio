@@ -57,6 +57,7 @@ export default function AuthScreen() {
               className="w-full p-3 bg-[#1e1e2f] border border-[#2b2b40] rounded text-white focus:border-[#1f8ef1] outline-none transition-colors"
               placeholder="twój@email.com"
               required
+              autoComplete="username"
             />
           </div>
 
@@ -70,6 +71,7 @@ export default function AuthScreen() {
                 className="w-full p-3 bg-[#1e1e2f] border border-[#2b2b40] rounded text-white focus:border-[#1f8ef1] outline-none transition-colors pr-12"
                 placeholder="Twoje hasło"
                 required
+                autoComplete="current-password"
               />
               
               {/* Ikona oka */}
