@@ -2,6 +2,7 @@ import { useState } from 'react'
 import TransactionForm from './components/TransactionForm'
 import TransactionList from './components/TransactionList'
 import PortfolioChart from './components/PortfolioChart'
+import GemModule from './components/GemModule'
 
 function App() {
   const [activeTab, setActiveTab] = useState('portfolio')
@@ -21,7 +22,7 @@ function App() {
             </h2>
           </div>
           
-          {/* Grupa przycisków na wzór tych z prawego górnego rogu obrazka */}
+          {/* Grupa przycisków przełączania zakładek */}
           <div className="flex rounded border border-[#fd5d93] overflow-hidden">
             <button
               onClick={() => setActiveTab('portfolio')}
@@ -54,12 +55,8 @@ function App() {
               <TransactionList refreshTrigger={refreshList} />
             </div>
           ) : (
-            <div className="animate-in fade-in duration-300 bg-[#27293d] rounded-xl p-8 shadow-lg">
-              <h2 className="text-2xl font-light mb-6 text-white">System Sygnałów GEM</h2>
-              <div className="flex flex-col items-center justify-center h-80 bg-[#1e1e2f] rounded-lg">
-                <div className="text-[#1f8ef1] mb-4 text-4xl">⚙️</div>
-                <p className="text-[#9a9a9a] font-medium">Moduł momentum i wskaźniki ETF w przygotowaniu...</p>
-              </div>
+            <div className="animate-in fade-in duration-300">
+              <GemModule />
             </div>
           )}
         </main>

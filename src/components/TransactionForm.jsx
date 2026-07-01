@@ -14,6 +14,7 @@ export default function TransactionForm({ onTransactionAdded }) {
     asset_currency: 'USD',
     exchange_rate_pln: ''
   })
+  const [showTooltip, setShowTooltip] = useState(false)
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
@@ -78,23 +79,33 @@ export default function TransactionForm({ onTransactionAdded }) {
         </h3>
         
         {/* Tooltip ze znakiem zapytania */}
-        <div className="relative group flex items-center">
-          <span className="cursor-help w-5 h-5 flex items-center justify-center rounded-full bg-[#1f8ef1]/20 text-[#1f8ef1] text-xs font-bold border border-[#1f8ef1]/50 hover:bg-[#1f8ef1] hover:text-white transition-colors">
+        <div 
+          className="relative flex items-center"
+          onMouseEnter={() => setShowTooltip(true)}
+          onMouseLeave={() => setShowTooltip(false)}
+        >
+          <span 
+            onClick={() => setShowTooltip(!showTooltip)}
+            className="cursor-pointer w-5 h-5 flex items-center justify-center rounded-full bg-[#1f8ef1]/20 text-[#1f8ef1] text-xs font-bold border border-[#1f8ef1]/50 hover:bg-[#1f8ef1] hover:text-white transition-colors"
+          >
             ?
           </span>
-          {/* Treść dymka */}
-          <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block w-72 p-4 bg-[#1e1e2f] border border-[#2b2b40] rounded-lg shadow-2xl z-50 text-xs text-[#9a9a9a] leading-relaxed">
-            <strong className="text-white block mb-2 text-sm">Zarządzanie gotówką 💵</strong>
-            <p className="mb-2">Aby dodać luźną gotówkę do portfela, użyj tickera zaczynającego się od <span className="text-[#1f8ef1] font-mono font-bold">CASH</span> (np. <span className="text-white font-mono">CASH-PLN</span>, <span className="text-white font-mono">CASH-USD</span>).</p>
-            <ul className="space-y-1">
-              <li><span className="text-[#00f2c3] font-bold">BUY</span>: Wpłata środków na konto</li>
-              <li><span className="text-[#fd5d93] font-bold">SELL</span>: Wypłata środków</li>
-              <li><span className="text-[#1f8ef1] font-bold">DIVIDEND</span>: Otrzymana dywidenda (zwiększa zysk netto)</li>
-              <li><span className="text-[#ffb236] font-bold">FEE</span>: Opłata za konto (zmniejsza zysk netto)</li>
-            </ul>
-            {/* Strzałeczka w dół */}
-            <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-transparent border-t-[#2b2b40]"></div>
-          </div>
+          
+          {/* Treść dymka (warunkowe renderowanie) */}
+          {showTooltip && (
+            <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-72 p-4 bg-[#1e1e2f] border border-[#2b2b40] rounded-lg shadow-2xl z-50 text-xs text-[#9a9a9a] leading-relaxed">
+              <strong className="text-white block mb-2 text-sm">Zarządzanie gotówką 💵</strong>
+              <p className="mb-2">Aby dodać luźną gotówkę do portfela, użyj tickera zaczynającego się od <span className="text-[#1f8ef1] font-mono font-bold">CASH</span> (np. <span className="text-white font-mono">CASH-PLN</span>, <span className="text-white font-mono">CASH-USD</span>).</p>
+              <ul className="space-y-1">
+                <li><span className="text-[#00f2c3] font-bold">BUY</span>: Wpłata środków na konto</li>
+                <li><span className="text-[#fd5d93] font-bold">SELL</span>: Wypłata środków</li>
+                <li><span className="text-[#1f8ef1] font-bold">DIVIDEND</span>: Otrzymana dywidenda (zwiększa zysk netto)</li>
+                <li><span className="text-[#ffb236] font-bold">FEE</span>: Opłata za konto (zmniejsza zysk netto)</li>
+              </ul>
+              {/* Strzałeczka w dół */}
+              <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-transparent border-t-[#2b2b40]"></div>
+            </div>
+          )}
         </div>
       </div>
       
