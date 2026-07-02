@@ -4,7 +4,8 @@ import TransactionForm from './components/TransactionForm'
 import TransactionList from './components/TransactionList'
 import PortfolioChart from './components/PortfolioChart'
 import GemModule from './components/GemModule'
-import AuthScreen from './components/AuthScreen' // Import nowego ekranu
+import AuthScreen from './components/AuthScreen'
+import XtbImporter from './components/XtbImporter' // Import nowego modułu XTB
 
 function App() {
   const [session, setSession] = useState(null)
@@ -73,7 +74,7 @@ function App() {
             {/* Przycisk wylogowania */}
             <button 
               onClick={handleLogout}
-              className="text-[#9a9a9a] hover:text-[#fd5d93] text-sm transition-colors"
+              className="text-[#9a9a9a] hover:text-[#fd5d93] text-sm transition-colors cursor-pointer"
             >
               Wyloguj
             </button>
@@ -84,6 +85,10 @@ function App() {
           {activeTab === 'portfolio' ? (
             <div className="animate-in fade-in duration-300">
               <PortfolioChart refreshTrigger={refreshList} />
+              
+              {/* Nasz nowy importer plików XTB - dodany pod wykresem */}
+              <XtbImporter onImportComplete={() => setRefreshList(prev => prev + 1)} />
+              
               <TransactionForm onTransactionAdded={() => setRefreshList(prev => prev + 1)} />
               <TransactionList refreshTrigger={refreshList} />
             </div>
