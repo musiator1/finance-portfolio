@@ -2,30 +2,68 @@ import { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { supabase } from '../supabase';
 
+// Pamięć podręczna dla kursów NBP, żeby nie pytać API wielokrotnie o ten sam dzień
+const nbpCache = {};
+
 export default function XtbImporter({ onImportComplete }) {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('');
-  const [clearDatabase, setClearDatabase] = useState(false);
-  const [showHelp, setShowHelp] = useState(false); // Stan dla dymka z instrukcją
+  const [showHelp, setShowHelp] = useState(false);
 
   // Tłumacz Tickerów XTB -> Yahoo Finance
   const mapXtbToYahoo = (xtbTicker) => {
-    if (!xtbTicker) return { ticker: '', currency: 'PLN' };
+    if (!xtbTicker) return '';
     const parts = xtbTicker.split('.');
-    if (parts.length === 1) return { ticker: xtbTicker, currency: 'USD' }; 
+    if (parts.length === 1) return xtbTicker; 
     const base = parts[0];
     const suffix = parts[1].toUpperCase();
+    
     switch (suffix) {
-      case 'PL': return { ticker: `${base}.WA`, currency: 'PLN' };
-      case 'US': return { ticker: base, currency: 'USD' };
-      case 'UK': return { ticker: `${base}.L`, currency: 'GBP' };
-      case 'DE': return { ticker: `${base}.DE`, currency: 'EUR' };
-      case 'FR': return { ticker: `${base}.PA`, currency: 'EUR' };
-      case 'ES': return { ticker: `${base}.MC`, currency: 'EUR' };
-      case 'NL': return { ticker: `${base}.AS`, currency: 'EUR' };
-      case 'IT': return { ticker: `${base}.MI`, currency: 'EUR' };
-      default: return { ticker: xtbTicker, currency: 'USD' };
+      case 'PL': return `${base}.WA`;
+      case 'US': return base;
+      case 'UK': return `${base}.L`;
+      case 'DE': return `${base}.DE`;
+      case 'FR': return `${base}.PA`;
+      case 'ES': return `${base}.MC`;
+      case 'NL': return `${base}.AS`;
+      case 'IT': return `${base}.MI`;
+      default: return xtbTicker;
     }
+  };
+
+  // Funkcja pobierająca historyczne kursy z NBP (z obsługą weekendów)
+  const fetchNbpRates = async (dateStr) => {
+    let targetDate = new Date(dateStr);
+    let attempts = 0;
+
+    while (attempts < 5) {
+      const dateString = targetDate.toISOString().split('T')[0];
+      if (nbpCache[dateString]) return nbpCache[dateString];
+
+      try {
+        const response = await fetch(`https://api.nbp.pl/api/exchangerates/tables/A/${dateString}/?format=json`);
+        if (response.ok) {
+          const data = await response.json();
+          const rates = data[0].rates;
+          
+          const result = {
+            USD: rates.find(r => r.code === 'USD')?.mid || 4.0,
+            EUR: rates.find(r => r.code === 'EUR')?.mid || 4.3,
+            GBP: rates.find(r => r.code === 'GBP')?.mid || 5.0,
+          };
+          
+          nbpCache[dateString] = result;
+          return result;
+        }
+      } catch (e) {
+        console.warn(`Brak kursu dla ${dateString}, sprawdzam dzień wcześniej...`);
+      }
+      
+      targetDate.setDate(targetDate.getDate() - 1);
+      attempts++;
+    }
+    
+    return { USD: 4.0, EUR: 4.3, GBP: 5.0 };
   };
 
   const handleFileUpload = async (e) => {
@@ -87,15 +125,14 @@ export default function XtbImporter({ onImportComplete }) {
   };
 
   const processAndUpload = async (parsedData, fileName) => {
-    setStatus('Analiza i księgowanie danych...');
+    setStatus('Inicjalizacja czyszczenia portfela...');
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Musisz być zalogowany.");
 
-    if (clearDatabase) {
-      setStatus('Czyszczenie starego portfela...');
-      const { error: deleteError } = await supabase.from('transactions').delete().eq('user_id', user.id);
-      if (deleteError) throw new Error("Błąd czyszczenia: " + deleteError.message);
-    }
+    // ZAWSZE automatycznie czyścimy dotychczasowy portfel użytkownika przed nowym importem
+    setStatus('Resetowanie bazy danych...');
+    const { error: deleteError } = await supabase.from('transactions').delete().eq('user_id', user.id);
+    if (deleteError) throw new Error("Błąd automatycznego czyszczenia bazy: " + deleteError.message);
 
     const dbTransactions = [];
 
@@ -121,8 +158,10 @@ export default function XtbImporter({ onImportComplete }) {
         if (!dateFormatted) continue;
         
         let xtbTicker = row['Ticker'] || row['Symbol'] || '';
-        let mappedData = mapXtbToYahoo(xtbTicker);
+        let mappedTicker = mapXtbToYahoo(xtbTicker);
+        const suffix = xtbTicker.includes('.') ? xtbTicker.split('.')[1].toUpperCase() : '';
 
+        // 1. WPŁATY I WYPŁATY
         if (isDeposit || isWithdrawal) {
             dbTransactions.push({
                 user_id: user.id, transaction_date: dateFormatted, ticker: 'CASH-PLN', asset_name: isDeposit ? 'Zasilenie konta' : 'Wypłata z konta',
@@ -131,6 +170,7 @@ export default function XtbImporter({ onImportComplete }) {
             continue;
         }
 
+        // 2. KUPNO I SPRZEDAŻ AKCJI
         if (isPurchase || isSell) {
             let qty = 1; let price = amountPLN; let exchangeRate = 1;
             const commentMatch = comment.match(/(?:BUY|SELL)\s+([\d.]+)(?:\/[\d.]+)?\s+@\s+([\d.]+)/);
@@ -139,19 +179,33 @@ export default function XtbImporter({ onImportComplete }) {
                 if (qty > 0 && price > 0) exchangeRate = amountPLN / (qty * price);
             }
 
-            if (isPurchase) {
-                dbTransactions.push({ user_id: user.id, transaction_date: dateFormatted, ticker: mappedData.ticker, asset_name: 'Zakup akcji', type: 'BUY', quantity: qty, price_per_share: price, asset_currency: mappedData.currency, exchange_rate_pln: Number(exchangeRate.toFixed(4)), commission: 0 });
-                dbTransactions.push({ user_id: user.id, transaction_date: dateFormatted, ticker: 'CASH-PLN', asset_name: `Zapłata za ${mappedData.ticker}`, type: 'SELL', quantity: amountPLN, price_per_share: 1, asset_currency: 'PLN', exchange_rate_pln: 1, commission: 0 });
+            let detectedCurrency = 'USD'; 
+            if (suffix === 'PL' || (exchangeRate > 0.8 && exchangeRate < 1.2)) {
+                detectedCurrency = 'PLN';
             } else {
-                dbTransactions.push({ user_id: user.id, transaction_date: dateFormatted, ticker: mappedData.ticker, asset_name: 'Sprzedaż akcji', type: 'SELL', quantity: qty, price_per_share: price, asset_currency: mappedData.currency, exchange_rate_pln: Number(exchangeRate.toFixed(4)), commission: 0 });
-                dbTransactions.push({ user_id: user.id, transaction_date: dateFormatted, ticker: 'CASH-PLN', asset_name: `Wpływ za ${mappedData.ticker}`, type: 'BUY', quantity: amountPLN, price_per_share: 1, asset_currency: 'PLN', exchange_rate_pln: 1, commission: 0 });
+                const nbpRates = await fetchNbpRates(dateFormatted);
+                const diffs = {
+                    USD: Math.abs(exchangeRate - nbpRates.USD),
+                    EUR: Math.abs(exchangeRate - nbpRates.EUR),
+                    GBP: Math.abs(exchangeRate - nbpRates.GBP)
+                };
+                detectedCurrency = Object.keys(diffs).reduce((a, b) => diffs[a] < diffs[b] ? a : b);
+            }
+
+            if (isPurchase) {
+                dbTransactions.push({ user_id: user.id, transaction_date: dateFormatted, ticker: mappedTicker, asset_name: 'Zakup akcji', type: 'BUY', quantity: qty, price_per_share: price, asset_currency: detectedCurrency, exchange_rate_pln: Number(exchangeRate.toFixed(4)), commission: 0 });
+                dbTransactions.push({ user_id: user.id, transaction_date: dateFormatted, ticker: 'CASH-PLN', asset_name: `Zapłata za ${mappedTicker}`, type: 'SELL', quantity: amountPLN, price_per_share: 1, asset_currency: 'PLN', exchange_rate_pln: 1, commission: 0 });
+            } else {
+                dbTransactions.push({ user_id: user.id, transaction_date: dateFormatted, ticker: mappedTicker, asset_name: 'Sprzedaż akcji', type: 'SELL', quantity: qty, price_per_share: price, asset_currency: detectedCurrency, exchange_rate_pln: Number(exchangeRate.toFixed(4)), commission: 0 });
+                dbTransactions.push({ user_id: user.id, transaction_date: dateFormatted, ticker: 'CASH-PLN', asset_name: `Wpływ za ${mappedTicker}`, type: 'BUY', quantity: amountPLN, price_per_share: 1, asset_currency: 'PLN', exchange_rate_pln: 1, commission: 0 });
             }
             continue;
         }
 
+        // 3. DYWIDENDY I PODATKI
         let cashType = ''; let cashName = '';
         if (isDividend) { cashType = 'DIVIDEND'; cashName = `Dywidenda ${xtbTicker}`; }
-        else if (isTax) { cashType = 'FEE'; cashName = `Podatek (Belki/U źródła) ${xtbTicker}`; }
+        else if (isTax) { cashType = 'FEE'; cashName = `Podatek u źródła ${xtbTicker}`; }
         else if (isFee) { cashType = 'FEE'; cashName = 'Opłata pobrana przez XTB'; }
 
         if (cashType) {
@@ -170,21 +224,20 @@ export default function XtbImporter({ onImportComplete }) {
     const { error } = await supabase.from('transactions').insert(dbTransactions);
     if (error) throw error;
 
-    setStatus(`✅ Gotowe! Wgrano ${dbTransactions.length} zbilansowanych operacji.`);
+    setStatus(`✅ Gotowe! Zaimportowano ${dbTransactions.length} operacji.`);
     if (onImportComplete) onImportComplete();
   };
 
   return (
     <div className="bg-[#27293d] p-4 rounded-xl shadow-lg mb-6 border border-[#2b2b40] flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
       
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-medium text-white">Import z XTB (Wersja Beta)</h3>
-          <span className="bg-[#00f2c3]/20 text-[#00f2c3] text-[10px] font-bold px-1.5 py-0.5 rounded border border-[#00f2c3]/50">
-            AUTO-FX
+          <h3 className="text-sm font-medium text-white">Automatyczny Import XTB</h3>
+          <span className="bg-[#1f8ef1]/20 text-[#1f8ef1] text-[10px] font-bold px-1.5 py-0.5 rounded border border-[#1f8ef1]/50">
+            MOŻE NIE DZIAŁAĆ POPRAWNIE
           </span>
           
-          {/* Znak zapytania z instrukcją */}
           <div 
             className="relative flex items-center ml-1"
             onMouseEnter={() => setShowHelp(true)}
@@ -202,38 +255,26 @@ export default function XtbImporter({ onImportComplete }) {
                 <strong className="text-white block mb-2">Instrukcja importu plików XTB:</strong>
                 <ol className="list-decimal pl-4 space-y-1 mb-3">
                   <li>Zaloguj się do platformy <span className="text-[#1f8ef1]">xStation 5</span>.</li>
-                  <li>Przejdź do zakładki <strong>Historia</strong>, a następnie <strong>Operacje gotówkowe</strong>.</li>
-                  <li>Wybierz interesujący Cię zakres dat i kliknij ikonkę pobierania (Eksportuj do Excel).</li>
-                  <li>Wybierz pobrany plik <code>.xlsx</code> używając przycisku poniżej.</li>
+                  <li>Przejdź do zakładki <strong>Historia</strong> → <strong>Operacje gotówkowe</strong>.</li>
+                  <li>Wybierz zakres dat i kliknij ikonkę pobierania (Eksportuj do Excel).</li>
+                  <li>Wybierz pobrany plik <code>.xlsx</code> przyciskiem obok.</li>
                 </ol>
                 <div className="bg-[#fd5d93]/10 border border-[#fd5d93]/30 p-2 rounded text-[#fd5d93]">
-                  <strong>⚠️ UWAGA:</strong> Jeśli zaznaczysz pole wyczyszczenia bazy, wszystkie dotychczasowe transakcje w tym portfelu zostaną <strong>trwale usunięte</strong> przed dodaniem nowych!
+                  <strong>⚠️ UWAGA:</strong> Każde załadowanie pliku <strong>automatycznie i trwale usuwa</strong> wszystkie dotychczasowe transakcje w Twoim portfelu, aby uniknąć duplikatów i całkowicie odświeżyć historię.
                 </div>
-                {/* Strzałeczka w dół (widoczna na dekstopach) */}
                 <div className="hidden md:block absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-transparent border-t-[#2b2b40]"></div>
               </div>
             )}
           </div>
         </div>
-
-        <label className="flex items-center gap-2 cursor-pointer mt-1">
-          <input 
-            type="checkbox" 
-            checked={clearDatabase}
-            onChange={(e) => setClearDatabase(e.target.checked)}
-            className="w-3.5 h-3.5 accent-[#fd5d93] cursor-pointer rounded"
-          />
-          <span className="text-[#fd5d93] font-medium text-xs">
-            Wyczyść obecne transakcje przed wgraniem pliku
-          </span>
-        </label>
+        <p className="text-[11px] text-[#9a9a9a] font-light">Wgraj raport operacji gotówkowych, aby zsynchronizować swój portfel.</p>
       </div>
 
       <div className="flex items-center gap-3 w-full md:w-auto">
-        <div className="text-xs text-white font-medium truncate max-w-[150px]">
+        <div className="text-xs text-[#1f8ef1] font-medium truncate max-w-[200px]">
           {status}
         </div>
-        <label className="flex items-center justify-center px-4 py-2 bg-[#1e1e2f] border border-[#00f2c3] text-[#00f2c3] text-xs font-semibold rounded cursor-pointer hover:bg-[#00f2c3]/10 transition-colors shrink-0 ml-auto md:ml-0">
+        <label className="flex items-center justify-center px-4 py-2 bg-[#1e1e2f] border border-[#1f8ef1] text-[#1f8ef1] text-xs font-semibold rounded cursor-pointer hover:bg-[#1f8ef1]/10 transition-colors shrink-0 ml-auto md:ml-0">
           <span>Wybierz .xlsx</span>
           <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload} disabled={loading} />
         </label>

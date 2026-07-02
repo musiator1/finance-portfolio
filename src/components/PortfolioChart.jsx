@@ -3,21 +3,22 @@ import { supabase } from '../supabase'
 import { 
   LineChart, Line, XAxis, YAxis, 
   CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  PieChart, Pie, Cell // Nowe importy dla wykresu kołowego
+  PieChart, Pie, Cell 
 } from 'recharts'
 
 const apiCache = {};
-
-// Kolory dla wykresu kołowego (dopasowane do ciemnego motywu)
 const PIE_COLORS = ['#1f8ef1', '#00f2c3', '#fd5d93', '#ffb236', '#8e44ad', '#f39c12', '#e74c3c', '#3498db'];
 
 export default function PortfolioChart({ refreshTrigger }) {
   const [chartData, setChartData] = useState([])
-  const [allocationData, setAllocationData] = useState([]) // Stan na dane dla Pie Chart
+  const [allocationData, setAllocationData] = useState([]) 
   const [activeView, setActiveView] = useState('value')
   const [interval, setInterval] = useState('weekly')
   const [loading, setLoading] = useState(false)
   
+  // Stan do wykrywania czy użytkownik jest na telefonie (do optymalizacji Pie Chart)
+  const [isMobile, setIsMobile] = useState(false);
+
   const [financialGoal, setFinancialGoal] = useState(() => {
     const saved = localStorage.getItem('financialGoal');
     return saved ? Number(saved) : 1000000;
@@ -27,6 +28,16 @@ export default function PortfolioChart({ refreshTrigger }) {
   useEffect(() => {
     localStorage.setItem('financialGoal', financialGoal);
   }, [financialGoal]);
+
+  // Listener sprawdzający szerokość ekranu dla urządzeń mobilnych
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   useEffect(() => {
     fetchAndProcessData()
@@ -104,7 +115,6 @@ export default function PortfolioChart({ refreshTrigger }) {
 
     const getPrice = (symbol, targetDateStr) => {
       if (symbol.startsWith('CASH')) return 1;
-
       const lookupKey = symbol.length === 3 && !symbol.includes('=') && uniqueCurrencies.includes(symbol) ? `${symbol}PLN=X` : symbol;
       if (!marketData[lookupKey]) return lastKnownPrices[lookupKey] || 0;
       const exactPrice = marketData[lookupKey][targetDateStr]
@@ -145,7 +155,6 @@ export default function PortfolioChart({ refreshTrigger }) {
         } else if (t.type === 'FEE') {
           runningShares[t.ticker].shares -= Number(t.quantity)
         }
-        
         txIndex++
       }
 
@@ -172,11 +181,10 @@ export default function PortfolioChart({ refreshTrigger }) {
       }
     })
 
-    // Obliczanie finalnego składu portfela dla wykresu kołowego
     const lastDateStr = dateArray[dateArray.length - 1];
     const currentAllocation = [];
     for (const [ticker, info] of Object.entries(runningShares)) {
-      if (info.shares > 0.0001) { // margines na błędy zmiennoprzecinkowe
+      if (info.shares > 0.0001) {
         const assetPrice = getPrice(ticker, lastDateStr);
         let fxRate = 1;
         if (info.currency !== 'PLN') {
@@ -185,14 +193,10 @@ export default function PortfolioChart({ refreshTrigger }) {
         }
         const plnValue = info.shares * assetPrice * fxRate;
         if (plnValue > 0) {
-          currentAllocation.push({
-            name: ticker,
-            value: Number(plnValue.toFixed(2))
-          });
+          currentAllocation.push({ name: ticker, value: Number(plnValue.toFixed(2)) });
         }
       }
     }
-    // Sortujemy od największej pozycji
     currentAllocation.sort((a, b) => b.value - a.value);
 
     setAllocationData(currentAllocation);
@@ -206,7 +210,6 @@ export default function PortfolioChart({ refreshTrigger }) {
 
   if (chartData.length === 0) return null
 
-  // Tooltip dla wykresu liniowego
   const CustomLineTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
@@ -225,16 +228,14 @@ export default function PortfolioChart({ refreshTrigger }) {
     return null
   }
 
-  // Tooltip dla wykresu kołowego
   const CustomPieTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       const total = allocationData.reduce((sum, item) => sum + item.value, 0);
       const percent = ((data.value / total) * 100).toFixed(1);
-      
       return (
         <div className="bg-[#27293d] p-3 rounded shadow-lg border border-[#1e1e2f]">
-          <p className="font-bold text-white mb-1">{data.name}</p>
+          <p className="font-bold text-white mb-1 text-sm">{data.name}</p>
           <p className="text-[#1f8ef1] text-sm font-medium">{data.value.toLocaleString('pl-PL')} PLN</p>
           <p className="text-[#9a9a9a] text-xs mt-1">Udział: <span className="text-white font-semibold">{percent}%</span></p>
         </div>
@@ -248,13 +249,9 @@ export default function PortfolioChart({ refreshTrigger }) {
   const goalSafeValue = financialGoal || 1; 
   const goalProgress = Math.min((latestData.marketValue / goalSafeValue) * 100, 100);
 
-  // --- Obliczenia dla zmiany okresowej ---
   const previousData = chartData.length > 1 ? chartData[chartData.length - 2] : latestData;
   const periodChange = latestData.marketValue - previousData.marketValue;
-  const periodChangePct = previousData.marketValue > 0 
-    ? ((periodChange / previousData.marketValue) * 100).toFixed(2) 
-    : 0;
-  
+  const periodChangePct = previousData.marketValue > 0 ? ((periodChange / previousData.marketValue) * 100).toFixed(2) : 0;
   const intervalLabel = interval === 'daily' ? 'Dzisiaj' : interval === 'weekly' ? 'Ten tydz.' : 'Ten mies.';
 
   return (
@@ -263,7 +260,7 @@ export default function PortfolioChart({ refreshTrigger }) {
       {/* WIDGETY KPI */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         
-        {/* Karta 1 - Przebudowana do podziału statystyk */}
+        {/* Karta 1 - Poprawiono klasę SVG dla telefonów */}
         <div className="bg-[#27293d] p-6 rounded-xl shadow-lg flex justify-between items-center min-h-[8rem]">
           <div className="w-12 h-12 rounded-full hidden xl:flex items-center justify-center bg-[#fd5d93]/20 shrink-0">
              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="#fd5d93" className="w-6 h-6">
@@ -275,8 +272,6 @@ export default function PortfolioChart({ refreshTrigger }) {
             <h3 className="text-2xl font-normal text-white mb-3">
               {latestData.marketValue.toLocaleString('pl-PL')} <span className="text-sm">PLN</span>
             </h3>
-            
-            {/* Równoważny podział informacji */}
             <div className="flex justify-end items-center divide-x divide-[#414868]">
               <div className="pr-3 text-right">
                 <p className="text-[10px] text-[#9a9a9a] uppercase tracking-wider mb-0.5">{intervalLabel}</p>
@@ -291,11 +286,10 @@ export default function PortfolioChart({ refreshTrigger }) {
                 </p>
               </div>
             </div>
-            
           </div>
         </div>
 
-        {/* Karta 2 */}
+        {/* Karta 2 - Poprawiono klasę SVG */}
         <div className="bg-[#27293d] p-6 rounded-xl shadow-lg flex justify-between items-center min-h-[8rem]">
           <div className="w-12 h-12 rounded-full hidden xl:flex items-center justify-center bg-[#00f2c3]/20 shrink-0">
              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="#00f2c3" className="w-6 h-6">
@@ -313,7 +307,7 @@ export default function PortfolioChart({ refreshTrigger }) {
           </div>
         </div>
 
-        {/* Karta 3 */}
+        {/* Karta 3 - Poprawiono klasę SVG */}
         <div className="bg-[#27293d] p-6 rounded-xl shadow-lg flex flex-col justify-center min-h-[8rem] relative group">
            <div className="flex justify-between items-center w-full mb-3">
               <div className="w-10 h-10 rounded-full hidden xl:flex items-center justify-center bg-[#1f8ef1]/20 shrink-0">
@@ -349,7 +343,6 @@ export default function PortfolioChart({ refreshTrigger }) {
                 )}
               </div>
            </div>
-           
            <div className="w-full bg-[#1e1e2f] rounded-full h-1.5 overflow-hidden mt-auto">
              <div className="bg-[#1f8ef1] h-full transition-all duration-1000" style={{ width: `${goalProgress}%` }}></div>
            </div>
@@ -357,9 +350,9 @@ export default function PortfolioChart({ refreshTrigger }) {
 
       </div>
 
-      {/* WYKRES GŁÓWNY LUB SKŁAD PORTFELA */}
-      <div className="bg-[#27293d] p-6 rounded-xl shadow-lg h-[450px] flex flex-col relative">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-6 z-10 w-full">
+      {/* WYKRES GŁÓWNY LUB RESPNSYWNY SKŁAD PORTFELA */}
+      <div className="bg-[#27293d] p-6 rounded-xl shadow-lg h-[480px] md:h-[450px] flex flex-col relative">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-4 z-10 w-full">
           <div>
             <h3 className="text-[#9a9a9a] text-sm font-light mb-1">PLN</h3>
             <h2 className="text-2xl font-normal text-white">
@@ -367,41 +360,18 @@ export default function PortfolioChart({ refreshTrigger }) {
             </h2>
           </div>
           
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            {/* 3 Przełączniki widoku */}
-            <div className="flex rounded border border-[#1f8ef1] overflow-hidden">
-              <button
-                onClick={() => setActiveView('value')}
-                className={`cursor-pointer px-4 lg:px-5 py-2 text-xs font-semibold transition-colors duration-200 ${
-                  activeView === 'value' ? 'bg-[#1f8ef1] text-white' : 'bg-transparent text-[#1f8ef1] hover:bg-[#1f8ef1]/10'
-                }`}
-              >
-                KAPITAŁ VS WARTOŚĆ
-              </button>
-              <button
-                onClick={() => setActiveView('profit')}
-                className={`cursor-pointer px-4 lg:px-5 py-2 text-xs font-semibold border-l border-[#1f8ef1] transition-colors duration-200 ${
-                  activeView === 'profit' ? 'bg-[#1f8ef1] text-white' : 'bg-transparent text-[#1f8ef1] hover:bg-[#1f8ef1]/10'
-                }`}
-              >
-                TYLKO ZYSK
-              </button>
-              <button
-                onClick={() => setActiveView('allocation')}
-                className={`cursor-pointer px-4 lg:px-5 py-2 text-xs font-semibold border-l border-[#1f8ef1] transition-colors duration-200 ${
-                  activeView === 'allocation' ? 'bg-[#1f8ef1] text-white' : 'bg-transparent text-[#1f8ef1] hover:bg-[#1f8ef1]/10'
-                }`}
-              >
-                SKŁAD PORTFELA
-              </button>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full lg:w-auto">
+            <div className="flex rounded border border-[#1f8ef1] overflow-hidden w-full sm:w-auto justify-between">
+              <button onClick={() => setActiveView('value')} className={`cursor-pointer flex-1 sm:flex-none px-3 lg:px-5 py-2 text-[10px] lg:text-xs font-semibold transition-colors ${activeView === 'value' ? 'bg-[#1f8ef1] text-white' : 'bg-transparent text-[#1f8ef1]'}`}>WARTOŚĆ</button>
+              <button onClick={() => setActiveView('profit')} className={`cursor-pointer flex-1 sm:flex-none px-3 lg:px-5 py-2 text-[10px] lg:text-xs font-semibold border-l border-[#1f8ef1] transition-colors ${activeView === 'profit' ? 'bg-[#1f8ef1] text-white' : 'bg-transparent text-[#1f8ef1]'}`}>ZYSK</button>
+              <button onClick={() => setActiveView('allocation')} className={`cursor-pointer flex-1 sm:flex-none px-3 lg:px-5 py-2 text-[10px] lg:text-xs font-semibold border-l border-[#1f8ef1] transition-colors ${activeView === 'allocation' ? 'bg-[#1f8ef1] text-white' : 'bg-transparent text-[#1f8ef1]'}`}>STRUKTURA</button>
             </div>
 
-            {/* Interwały (ukrywamy je dla wykresu kołowego, bo to stan obecny) */}
             {activeView !== 'allocation' && (
-              <div className="flex bg-[#1e1e2f] rounded p-1">
-                <button onClick={() => setInterval('daily')} disabled={loading} className={`cursor-pointer px-4 py-1.5 text-xs rounded font-medium transition-colors ${ interval === 'daily' ? 'bg-[#fd5d93] text-white shadow' : 'text-[#9a9a9a] hover:text-white disabled:opacity-50' }`}>1D</button>
-                <button onClick={() => setInterval('weekly')} disabled={loading} className={`cursor-pointer px-4 py-1.5 text-xs rounded font-medium transition-colors ${ interval === 'weekly' ? 'bg-[#fd5d93] text-white shadow' : 'text-[#9a9a9a] hover:text-white disabled:opacity-50' }`}>1W</button>
-                <button onClick={() => setInterval('monthly')} disabled={loading} className={`cursor-pointer px-4 py-1.5 text-xs rounded font-medium transition-colors ${ interval === 'monthly' ? 'bg-[#fd5d93] text-white shadow' : 'text-[#9a9a9a] hover:text-white disabled:opacity-50' }`}>1M</button>
+              <div className="flex bg-[#1e1e2f] rounded p-1 ml-auto sm:ml-0">
+                <button onClick={() => setInterval('daily')} disabled={loading} className={`cursor-pointer px-3 py-1 text-xs rounded font-medium ${ interval === 'daily' ? 'bg-[#fd5d93] text-white shadow' : 'text-[#9a9a9a]' }`}>1D</button>
+                <button onClick={() => setInterval('weekly')} disabled={loading} className={`cursor-pointer px-3 py-1 text-xs rounded font-medium ${ interval === 'weekly' ? 'bg-[#fd5d93] text-white shadow' : 'text-[#9a9a9a]' }`}>1W</button>
+                <button onClick={() => setInterval('monthly')} disabled={loading} className={`cursor-pointer px-3 py-1 text-xs rounded font-medium ${ interval === 'monthly' ? 'bg-[#fd5d93] text-white shadow' : 'text-[#9a9a9a]' }`}>1M</button>
               </div>
             )}
           </div>
@@ -410,16 +380,15 @@ export default function PortfolioChart({ refreshTrigger }) {
         <div className="flex-grow min-h-0">
           {loading && <div className="absolute inset-0 z-10 flex items-center justify-center font-light text-[#1f8ef1] bg-[#27293d]/50 rounded-xl">Aktualizowanie...</div>}
           
-          {/* RENDEROWANIE ZALEŻNE OD WYBRANEGO WIDOKU */}
           {activeView === 'allocation' ? (
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={allocationData}
                   cx="50%"
-                  cy="50%"
-                  innerRadius={70}
-                  outerRadius={120}
+                  cy={isMobile ? "40%" : "50%"} // Wyżej na telefonie, żeby zwolnić miejsce na legendę
+                  innerRadius={isMobile ? 50 : 70}  // Mniejsza dziura na telefonie
+                  outerRadius={isMobile ? 80 : 120} // Mniejsza średnica na telefonie
                   paddingAngle={3}
                   dataKey="value"
                   stroke="none"
@@ -429,37 +398,30 @@ export default function PortfolioChart({ refreshTrigger }) {
                   ))}
                 </Pie>
                 <Tooltip content={<CustomPieTooltip />} />
-                <Legend wrapperStyle={{ paddingTop: '20px' }} iconType="circle" />
+                <Legend 
+                  wrapperStyle={{ paddingTop: isMobile ? '0px' : '20px', fontSize: isMobile ? '11px' : '12px' }} 
+                  verticalAlign={isMobile ? 'bottom' : 'middle'} 
+                  layout={isMobile ? 'horizontal' : 'vertical'}
+                  align="center"
+                  iconType="circle" 
+                />
               </PieChart>
             </ResponsiveContainer>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <XAxis 
-                  dataKey="date" 
-                  tickFormatter={(dateStr) => {
-                    const d = new Date(dateStr);
-                    return isNaN(d) ? dateStr : d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
-                  }}
-                  tick={{fontSize: 11, fill: '#9a9a9a'}} 
-                  stroke="#2b2b40" 
-                  tickMargin={10} 
-                  minTickGap={30} 
-                  axisLine={false} 
-                  tickLine={false} 
-                />
-                <YAxis tick={{fontSize: 11, fill: '#9a9a9a'}} stroke="#2b2b40" tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`} width={60} axisLine={false} tickLine={false} />
-                <CartesianGrid strokeDasharray="3 3" vertical={true} horizontal={true} stroke="#414868" strokeOpacity={0.6} />
-                <Tooltip content={<CustomLineTooltip />} cursor={{ stroke: '#2b2b40', strokeWidth: 1, strokeDasharray: '4 4' }} />
-                <Legend wrapperStyle={{ paddingTop: '10px' }} iconType="circle" />
-
+              <LineChart data={chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                <XAxis dataKey="date" tickFormatter={(dateStr) => { const d = new Date(dateStr); return isNaN(d) ? dateStr : d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase(); }} tick={{fontSize: 10, fill: '#9a9a9a'}} stroke="#2b2b40" tickMargin={10} minTickGap={35} axisLine={false} tickLine={false} />
+                <YAxis tick={{fontSize: 10, fill: '#9a9a9a'}} stroke="#2b2b40" tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`} width={50} axisLine={false} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" vertical={true} horizontal={true} stroke="#414868" strokeOpacity={0.4} />
+                <Tooltip content={<CustomLineTooltip />} cursor={{ stroke: '#2b2b40', strokeWidth: 1 }} />
+                <Legend wrapperStyle={{ paddingTop: '10px', fontSize: '11px' }} iconType="circle" />
                 {activeView === 'value' ? (
                   <>
-                    <Line type="monotone" dataKey="marketValue" name="Wartość" stroke="#1f8ef1" strokeWidth={2} dot={false} activeDot={{ r: 5, strokeWidth: 0 }} isAnimationActive={false} />
-                    <Line type="monotone" dataKey="invested" name="Kapitał" stroke="#9a9a9a" strokeWidth={2} dot={false} activeDot={{ r: 5, strokeWidth: 0 }} isAnimationActive={false} />
+                    <Line type="monotone" dataKey="marketValue" name="Wartość" stroke="#1f8ef1" strokeWidth={2} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
+                    <Line type="monotone" dataKey="invested" name="Kapitał" stroke="#9a9a9a" strokeWidth={1.5} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
                   </>
                 ) : (
-                  <Line type="monotone" dataKey="profit" name="Zysk netto" stroke="#00f2c3" strokeWidth={2} dot={false} activeDot={{ r: 5, strokeWidth: 0 }} isAnimationActive={false} />
+                  <Line type="monotone" dataKey="profit" name="Zysk netto" stroke="#00f2c3" strokeWidth={2} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
                 )}
               </LineChart>
             </ResponsiveContainer>
