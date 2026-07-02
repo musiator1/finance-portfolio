@@ -61,7 +61,6 @@ export default function PortfolioChart({ refreshTrigger }) {
     const todayStr = today.toISOString().split('T')[0]
     if (dateArray[dateArray.length - 1] !== todayStr) dateArray.push(todayStr)
 
-    // Filtrujemy tickery zaczynające się od CASH (np. CASH-USD), żeby nie uderzać do API Yahoo
     const uniqueTickers = [...new Set(data.map(t => t.ticker))].filter(t => !t.startsWith('CASH'))
     const uniqueCurrencies = [...new Set(data.map(t => t.asset_currency))].filter(c => c !== 'PLN')
 
@@ -98,7 +97,6 @@ export default function PortfolioChart({ refreshTrigger }) {
     let lastKnownPrices = {} 
 
     const getPrice = (symbol, targetDateStr) => {
-      // Dla sztucznego aktywa gotówkowego cena zawsze wynosi 1 (FX zajmie się ewentualnym przewalutowaniem)
       if (symbol.startsWith('CASH')) return 1;
 
       const lookupKey = symbol.length === 3 && !symbol.includes('=') && uniqueCurrencies.includes(symbol) ? `${symbol}PLN=X` : symbol;
@@ -130,7 +128,6 @@ export default function PortfolioChart({ refreshTrigger }) {
         
         if (!runningShares[t.ticker]) runningShares[t.ticker] = { shares: 0, currency: t.asset_currency }
         
-        // NOWA LOGIKA BIZNESOWA:
         if (t.type === 'BUY') {
           currentCapital += value
           runningShares[t.ticker].shares += Number(t.quantity)
@@ -138,10 +135,8 @@ export default function PortfolioChart({ refreshTrigger }) {
           currentCapital -= value
           runningShares[t.ticker].shares -= Number(t.quantity)
         } else if (t.type === 'DIVIDEND') {
-          // Dywidenda to wpływ gotówki bez podnoszenia kosztu inwestycji (zysk rośnie)
           runningShares[t.ticker].shares += Number(t.quantity)
         } else if (t.type === 'FEE') {
-          // Opłata to odpływ gotówki bez zmian we wpłaconym kapitale (zysk maleje)
           runningShares[t.ticker].shares -= Number(t.quantity)
         }
         
@@ -212,7 +207,6 @@ export default function PortfolioChart({ refreshTrigger }) {
     : 0;
   
   const intervalLabel = interval === 'daily' ? 'Dzisiaj' : interval === 'weekly' ? 'Ten tydz.' : 'Ten mies.';
-  // ---------------------------------------
 
   return (
     <div className="flex flex-col gap-8 mb-6">
@@ -220,37 +214,46 @@ export default function PortfolioChart({ refreshTrigger }) {
       {/* WIDGETY KPI */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         
-        {/* Karta 1 */}
-        <div className="bg-[#27293d] p-6 rounded-xl shadow-lg flex justify-between items-center h-32">
-          <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#fd5d93]/20">
+        {/* Karta 1 - Przebudowana do podziału statystyk */}
+        <div className="bg-[#27293d] p-6 rounded-xl shadow-lg flex justify-between items-center min-h-[8rem]">
+          <div className="w-12 h-12 rounded-full hidden xl:flex items-center justify-center bg-[#fd5d93]/20 shrink-0">
              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="#fd5d93" className="w-6 h-6">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 12V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2h14a2 2 0 002-2v-5m-4 0h4M17 12a2 2 0 110-4 2 2 0 010 4z" />
              </svg>
           </div>
-          <div className="text-right">
+          <div className="text-right flex-1">
             <p className="text-sm font-light text-[#9a9a9a] mb-1">Aktualna wartość</p>
-            <h3 className="text-2xl font-normal text-white">
+            <h3 className="text-2xl font-normal text-white mb-3">
               {latestData.marketValue.toLocaleString('pl-PL')} <span className="text-sm">PLN</span>
             </h3>
-            <div className="flex flex-col items-end mt-1 gap-0.5">
-              <p className={`text-xs font-medium ${periodChange >= 0 ? 'text-[#00f2c3]' : 'text-[#fd5d93]'}`}>
-                 {periodChange >= 0 ? '▲' : '▼'} {intervalLabel}: {periodChange > 0 ? '+' : ''}{periodChange.toLocaleString('pl-PL')} PLN ({periodChange > 0 ? '+' : ''}{periodChangePct}%)
-              </p>
-              <p className="text-[10px] text-[#9a9a9a]">
-                Zysk całk.: {latestData.profit > 0 ? '+' : ''}{latestData.profit.toLocaleString('pl-PL')} PLN
-              </p>
+            
+            {/* Równoważny podział informacji */}
+            <div className="flex justify-end items-center divide-x divide-[#414868]">
+              <div className="pr-3 text-right">
+                <p className="text-[10px] text-[#9a9a9a] uppercase tracking-wider mb-0.5">{intervalLabel}</p>
+                <p className={`text-xs font-semibold ${periodChange >= 0 ? 'text-[#00f2c3]' : 'text-[#fd5d93]'}`}>
+                  {periodChange >= 0 ? '▲' : '▼'} {Math.abs(periodChangePct)}%
+                </p>
+              </div>
+              <div className="pl-3 text-right">
+                <p className="text-[10px] text-[#9a9a9a] uppercase tracking-wider mb-0.5">Zysk całk.</p>
+                <p className={`text-xs font-semibold ${latestData.profit >= 0 ? 'text-[#00f2c3]' : 'text-[#fd5d93]'}`}>
+                  {latestData.profit >= 0 ? '▲' : '▼'} {Math.abs(latestData.profit).toLocaleString('pl-PL')} PLN
+                </p>
+              </div>
             </div>
+            
           </div>
         </div>
 
         {/* Karta 2 */}
-        <div className="bg-[#27293d] p-6 rounded-xl shadow-lg flex justify-between items-center h-32">
-          <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#00f2c3]/20">
+        <div className="bg-[#27293d] p-6 rounded-xl shadow-lg flex justify-between items-center min-h-[8rem]">
+          <div className="w-12 h-12 rounded-full hidden xl:flex items-center justify-center bg-[#00f2c3]/20 shrink-0">
              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="#00f2c3" className="w-6 h-6">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.306a11.95 11.95 0 015.814-5.518l2.74-1.22m0 0l-5.94-2.281m5.94 2.28l-2.28 5.941" />
              </svg>
           </div>
-          <div className="text-right">
+          <div className="text-right flex-1">
             <p className="text-sm font-light text-[#9a9a9a] mb-1">Całkowita stopa zwrotu</p>
             <h3 className="text-2xl font-normal text-white">
               {simpleROI >= 0 ? '+' : ''}{simpleROI}%
@@ -262,16 +265,16 @@ export default function PortfolioChart({ refreshTrigger }) {
         </div>
 
         {/* Karta 3 */}
-        <div className="bg-[#27293d] p-6 rounded-xl shadow-lg flex flex-col justify-center h-32 relative group">
+        <div className="bg-[#27293d] p-6 rounded-xl shadow-lg flex flex-col justify-center min-h-[8rem] relative group">
            <div className="flex justify-between items-center w-full mb-3">
-              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-[#1f8ef1]/20">
+              <div className="w-10 h-10 rounded-full hidden xl:flex items-center justify-center bg-[#1f8ef1]/20 shrink-0">
                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="#1f8ef1" className="w-6 h-6">
                     <circle cx="12" cy="12" r="10" />
                     <circle cx="12" cy="12" r="6" />
                     <circle cx="12" cy="12" r="2" />
                  </svg>
               </div>
-              <div className="text-right flex-1 ml-4">
+              <div className="text-right flex-1 xl:ml-4">
                 <div className="flex justify-end items-center gap-2">
                   <p className="text-sm font-light text-[#9a9a9a]">Cel</p>
                   <span className="text-xs text-[#1f8ef1] font-bold">{goalProgress.toFixed(1)}%</span>
