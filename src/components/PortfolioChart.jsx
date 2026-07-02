@@ -2,13 +2,18 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../supabase'
 import { 
   LineChart, Line, XAxis, YAxis, 
-  CartesianGrid, Tooltip, Legend, ResponsiveContainer 
+  CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  PieChart, Pie, Cell // Nowe importy dla wykresu kołowego
 } from 'recharts'
 
 const apiCache = {};
 
+// Kolory dla wykresu kołowego (dopasowane do ciemnego motywu)
+const PIE_COLORS = ['#1f8ef1', '#00f2c3', '#fd5d93', '#ffb236', '#8e44ad', '#f39c12', '#e74c3c', '#3498db'];
+
 export default function PortfolioChart({ refreshTrigger }) {
   const [chartData, setChartData] = useState([])
+  const [allocationData, setAllocationData] = useState([]) // Stan na dane dla Pie Chart
   const [activeView, setActiveView] = useState('value')
   const [interval, setInterval] = useState('weekly')
   const [loading, setLoading] = useState(false)
@@ -36,6 +41,7 @@ export default function PortfolioChart({ refreshTrigger }) {
 
     if (error || !data || data.length === 0) {
       setChartData([])
+      setAllocationData([])
       setLoading(false)
       return
     }
@@ -166,6 +172,30 @@ export default function PortfolioChart({ refreshTrigger }) {
       }
     })
 
+    // Obliczanie finalnego składu portfela dla wykresu kołowego
+    const lastDateStr = dateArray[dateArray.length - 1];
+    const currentAllocation = [];
+    for (const [ticker, info] of Object.entries(runningShares)) {
+      if (info.shares > 0.0001) { // margines na błędy zmiennoprzecinkowe
+        const assetPrice = getPrice(ticker, lastDateStr);
+        let fxRate = 1;
+        if (info.currency !== 'PLN') {
+          fxRate = getPrice(info.currency, lastDateStr);
+          if (fxRate === 0) fxRate = info.currency === 'USD' ? 4.0 : 4.3;
+        }
+        const plnValue = info.shares * assetPrice * fxRate;
+        if (plnValue > 0) {
+          currentAllocation.push({
+            name: ticker,
+            value: Number(plnValue.toFixed(2))
+          });
+        }
+      }
+    }
+    // Sortujemy od największej pozycji
+    currentAllocation.sort((a, b) => b.value - a.value);
+
+    setAllocationData(currentAllocation);
     setChartData(finalData)
     setLoading(false)
   }
@@ -176,7 +206,8 @@ export default function PortfolioChart({ refreshTrigger }) {
 
   if (chartData.length === 0) return null
 
-  const CustomTooltip = ({ active, payload, label }) => {
+  // Tooltip dla wykresu liniowego
+  const CustomLineTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-[#27293d] p-3 rounded shadow-lg border border-[#1e1e2f]">
@@ -192,6 +223,24 @@ export default function PortfolioChart({ refreshTrigger }) {
       )
     }
     return null
+  }
+
+  // Tooltip dla wykresu kołowego
+  const CustomPieTooltip = ({ active, payload }) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      const total = allocationData.reduce((sum, item) => sum + item.value, 0);
+      const percent = ((data.value / total) * 100).toFixed(1);
+      
+      return (
+        <div className="bg-[#27293d] p-3 rounded shadow-lg border border-[#1e1e2f]">
+          <p className="font-bold text-white mb-1">{data.name}</p>
+          <p className="text-[#1f8ef1] text-sm font-medium">{data.value.toLocaleString('pl-PL')} PLN</p>
+          <p className="text-[#9a9a9a] text-xs mt-1">Udział: <span className="text-white font-semibold">{percent}%</span></p>
+        </div>
+      );
+    }
+    return null;
   }
 
   const latestData = chartData[chartData.length - 1] || { invested: 0, marketValue: 0, profit: 0 };
@@ -308,19 +357,22 @@ export default function PortfolioChart({ refreshTrigger }) {
 
       </div>
 
-      {/* WYKRES GŁÓWNY */}
+      {/* WYKRES GŁÓWNY LUB SKŁAD PORTFELA */}
       <div className="bg-[#27293d] p-6 rounded-xl shadow-lg h-[450px] flex flex-col relative">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-6 z-10 w-full">
           <div>
             <h3 className="text-[#9a9a9a] text-sm font-light mb-1">PLN</h3>
-            <h2 className="text-2xl font-normal text-white">Portfel w czasie</h2>
+            <h2 className="text-2xl font-normal text-white">
+              {activeView === 'allocation' ? 'Skład portfela' : 'Portfel w czasie'}
+            </h2>
           </div>
           
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            {/* 3 Przełączniki widoku */}
             <div className="flex rounded border border-[#1f8ef1] overflow-hidden">
               <button
                 onClick={() => setActiveView('value')}
-                className={`cursor-pointer px-5 py-2 text-sm font-semibold transition-colors duration-200 ${
+                className={`cursor-pointer px-4 lg:px-5 py-2 text-xs font-semibold transition-colors duration-200 ${
                   activeView === 'value' ? 'bg-[#1f8ef1] text-white' : 'bg-transparent text-[#1f8ef1] hover:bg-[#1f8ef1]/10'
                 }`}
               >
@@ -328,54 +380,90 @@ export default function PortfolioChart({ refreshTrigger }) {
               </button>
               <button
                 onClick={() => setActiveView('profit')}
-                className={`cursor-pointer px-5 py-2 text-sm font-semibold border-l border-[#1f8ef1] transition-colors duration-200 ${
+                className={`cursor-pointer px-4 lg:px-5 py-2 text-xs font-semibold border-l border-[#1f8ef1] transition-colors duration-200 ${
                   activeView === 'profit' ? 'bg-[#1f8ef1] text-white' : 'bg-transparent text-[#1f8ef1] hover:bg-[#1f8ef1]/10'
                 }`}
               >
                 TYLKO ZYSK
               </button>
+              <button
+                onClick={() => setActiveView('allocation')}
+                className={`cursor-pointer px-4 lg:px-5 py-2 text-xs font-semibold border-l border-[#1f8ef1] transition-colors duration-200 ${
+                  activeView === 'allocation' ? 'bg-[#1f8ef1] text-white' : 'bg-transparent text-[#1f8ef1] hover:bg-[#1f8ef1]/10'
+                }`}
+              >
+                SKŁAD PORTFELA
+              </button>
             </div>
 
-            <div className="flex bg-[#1e1e2f] rounded p-1">
-              <button onClick={() => setInterval('daily')} disabled={loading} className={`cursor-pointer px-4 py-1.5 text-xs rounded font-medium transition-colors ${ interval === 'daily' ? 'bg-[#fd5d93] text-white shadow' : 'text-[#9a9a9a] hover:text-white disabled:opacity-50' }`}>1D</button>
-              <button onClick={() => setInterval('weekly')} disabled={loading} className={`cursor-pointer px-4 py-1.5 text-xs rounded font-medium transition-colors ${ interval === 'weekly' ? 'bg-[#fd5d93] text-white shadow' : 'text-[#9a9a9a] hover:text-white disabled:opacity-50' }`}>1W</button>
-              <button onClick={() => setInterval('monthly')} disabled={loading} className={`cursor-pointer px-4 py-1.5 text-xs rounded font-medium transition-colors ${ interval === 'monthly' ? 'bg-[#fd5d93] text-white shadow' : 'text-[#9a9a9a] hover:text-white disabled:opacity-50' }`}>1M</button>
-            </div>
+            {/* Interwały (ukrywamy je dla wykresu kołowego, bo to stan obecny) */}
+            {activeView !== 'allocation' && (
+              <div className="flex bg-[#1e1e2f] rounded p-1">
+                <button onClick={() => setInterval('daily')} disabled={loading} className={`cursor-pointer px-4 py-1.5 text-xs rounded font-medium transition-colors ${ interval === 'daily' ? 'bg-[#fd5d93] text-white shadow' : 'text-[#9a9a9a] hover:text-white disabled:opacity-50' }`}>1D</button>
+                <button onClick={() => setInterval('weekly')} disabled={loading} className={`cursor-pointer px-4 py-1.5 text-xs rounded font-medium transition-colors ${ interval === 'weekly' ? 'bg-[#fd5d93] text-white shadow' : 'text-[#9a9a9a] hover:text-white disabled:opacity-50' }`}>1W</button>
+                <button onClick={() => setInterval('monthly')} disabled={loading} className={`cursor-pointer px-4 py-1.5 text-xs rounded font-medium transition-colors ${ interval === 'monthly' ? 'bg-[#fd5d93] text-white shadow' : 'text-[#9a9a9a] hover:text-white disabled:opacity-50' }`}>1M</button>
+              </div>
+            )}
           </div>
         </div>
 
         <div className="flex-grow min-h-0">
           {loading && <div className="absolute inset-0 z-10 flex items-center justify-center font-light text-[#1f8ef1] bg-[#27293d]/50 rounded-xl">Aktualizowanie...</div>}
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <XAxis 
-                dataKey="date" 
-                tickFormatter={(dateStr) => {
-                  const d = new Date(dateStr);
-                  return isNaN(d) ? dateStr : d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
-                }}
-                tick={{fontSize: 11, fill: '#9a9a9a'}} 
-                stroke="#2b2b40" 
-                tickMargin={10} 
-                minTickGap={30} 
-                axisLine={false} 
-                tickLine={false} 
-              />
-              <YAxis tick={{fontSize: 11, fill: '#9a9a9a'}} stroke="#2b2b40" tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`} width={60} axisLine={false} tickLine={false} />
-              <CartesianGrid strokeDasharray="3 3" vertical={true} horizontal={true} stroke="#414868" strokeOpacity={0.6} />
-              <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#2b2b40', strokeWidth: 1, strokeDasharray: '4 4' }} />
-              <Legend wrapperStyle={{ paddingTop: '10px' }} iconType="circle" />
+          
+          {/* RENDEROWANIE ZALEŻNE OD WYBRANEGO WIDOKU */}
+          {activeView === 'allocation' ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={allocationData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={70}
+                  outerRadius={120}
+                  paddingAngle={3}
+                  dataKey="value"
+                  stroke="none"
+                >
+                  {allocationData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip content={<CustomPieTooltip />} />
+                <Legend wrapperStyle={{ paddingTop: '20px' }} iconType="circle" />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <XAxis 
+                  dataKey="date" 
+                  tickFormatter={(dateStr) => {
+                    const d = new Date(dateStr);
+                    return isNaN(d) ? dateStr : d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
+                  }}
+                  tick={{fontSize: 11, fill: '#9a9a9a'}} 
+                  stroke="#2b2b40" 
+                  tickMargin={10} 
+                  minTickGap={30} 
+                  axisLine={false} 
+                  tickLine={false} 
+                />
+                <YAxis tick={{fontSize: 11, fill: '#9a9a9a'}} stroke="#2b2b40" tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`} width={60} axisLine={false} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" vertical={true} horizontal={true} stroke="#414868" strokeOpacity={0.6} />
+                <Tooltip content={<CustomLineTooltip />} cursor={{ stroke: '#2b2b40', strokeWidth: 1, strokeDasharray: '4 4' }} />
+                <Legend wrapperStyle={{ paddingTop: '10px' }} iconType="circle" />
 
-              {activeView === 'value' ? (
-                <>
-                  <Line type="monotone" dataKey="marketValue" name="Wartość" stroke="#1f8ef1" strokeWidth={2} dot={false} activeDot={{ r: 5, strokeWidth: 0 }} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="invested" name="Kapitał" stroke="#9a9a9a" strokeWidth={2} dot={false} activeDot={{ r: 5, strokeWidth: 0 }} isAnimationActive={false} />
-                </>
-              ) : (
-                <Line type="monotone" dataKey="profit" name="Zysk netto" stroke="#00f2c3" strokeWidth={2} dot={false} activeDot={{ r: 5, strokeWidth: 0 }} isAnimationActive={false} />
-              )}
-            </LineChart>
-          </ResponsiveContainer>
+                {activeView === 'value' ? (
+                  <>
+                    <Line type="monotone" dataKey="marketValue" name="Wartość" stroke="#1f8ef1" strokeWidth={2} dot={false} activeDot={{ r: 5, strokeWidth: 0 }} isAnimationActive={false} />
+                    <Line type="monotone" dataKey="invested" name="Kapitał" stroke="#9a9a9a" strokeWidth={2} dot={false} activeDot={{ r: 5, strokeWidth: 0 }} isAnimationActive={false} />
+                  </>
+                ) : (
+                  <Line type="monotone" dataKey="profit" name="Zysk netto" stroke="#00f2c3" strokeWidth={2} dot={false} activeDot={{ r: 5, strokeWidth: 0 }} isAnimationActive={false} />
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
     </div>
