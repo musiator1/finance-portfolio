@@ -262,7 +262,7 @@ export default function PortfolioChart({ refreshTrigger }) {
         
         {/* Karta 1 - Poprawiono klasę SVG dla telefonów */}
         <div className="bg-[#27293d] p-6 rounded-xl shadow-lg flex justify-between items-center min-h-[8rem]">
-          <div className="w-12 h-12 rounded-full hidden xl:flex items-center justify-center bg-[#fd5d93]/20 shrink-0">
+          <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#fd5d93]/20 shrink-0">
              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="#fd5d93" className="w-6 h-6">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 12V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2h14a2 2 0 002-2v-5m-4 0h4M17 12a2 2 0 110-4 2 2 0 010 4z" />
              </svg>
@@ -291,7 +291,7 @@ export default function PortfolioChart({ refreshTrigger }) {
 
         {/* Karta 2 - Poprawiono klasę SVG */}
         <div className="bg-[#27293d] p-6 rounded-xl shadow-lg flex justify-between items-center min-h-[8rem]">
-          <div className="w-12 h-12 rounded-full hidden xl:flex items-center justify-center bg-[#00f2c3]/20 shrink-0">
+          <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#00f2c3]/20 shrink-0">
              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="#00f2c3" className="w-6 h-6">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.306a11.95 11.95 0 015.814-5.518l2.74-1.22m0 0l-5.94-2.281m5.94 2.28l-2.28 5.941" />
              </svg>
@@ -310,7 +310,7 @@ export default function PortfolioChart({ refreshTrigger }) {
         {/* Karta 3 - Poprawiono klasę SVG */}
         <div className="bg-[#27293d] p-6 rounded-xl shadow-lg flex flex-col justify-center min-h-[8rem] relative group">
            <div className="flex justify-between items-center w-full mb-3">
-              <div className="w-10 h-10 rounded-full hidden xl:flex items-center justify-center bg-[#1f8ef1]/20 shrink-0">
+              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-[#1f8ef1]/20 shrink-0">
                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="#1f8ef1" className="w-6 h-6">
                     <circle cx="12" cy="12" r="10" />
                     <circle cx="12" cy="12" r="6" />
