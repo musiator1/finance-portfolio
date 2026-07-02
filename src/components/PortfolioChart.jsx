@@ -204,6 +204,16 @@ export default function PortfolioChart({ refreshTrigger }) {
   const goalSafeValue = financialGoal || 1; 
   const goalProgress = Math.min((latestData.marketValue / goalSafeValue) * 100, 100);
 
+  // --- Obliczenia dla zmiany okresowej ---
+  const previousData = chartData.length > 1 ? chartData[chartData.length - 2] : latestData;
+  const periodChange = latestData.marketValue - previousData.marketValue;
+  const periodChangePct = previousData.marketValue > 0 
+    ? ((periodChange / previousData.marketValue) * 100).toFixed(2) 
+    : 0;
+  
+  const intervalLabel = interval === 'daily' ? 'Dzisiaj' : interval === 'weekly' ? 'Ten tydz.' : 'Ten mies.';
+  // ---------------------------------------
+
   return (
     <div className="flex flex-col gap-8 mb-6">
       
@@ -222,9 +232,14 @@ export default function PortfolioChart({ refreshTrigger }) {
             <h3 className="text-2xl font-normal text-white">
               {latestData.marketValue.toLocaleString('pl-PL')} <span className="text-sm">PLN</span>
             </h3>
-            <p className={`text-xs mt-1 ${latestData.profit >= 0 ? 'text-[#00f2c3]' : 'text-[#fd5d93]'}`}>
-               {latestData.profit >= 0 ? '▲' : '▼'} {Math.abs(latestData.profit).toLocaleString('pl-PL')} PLN
-            </p>
+            <div className="flex flex-col items-end mt-1 gap-0.5">
+              <p className={`text-xs font-medium ${periodChange >= 0 ? 'text-[#00f2c3]' : 'text-[#fd5d93]'}`}>
+                 {periodChange >= 0 ? '▲' : '▼'} {intervalLabel}: {periodChange > 0 ? '+' : ''}{periodChange.toLocaleString('pl-PL')} PLN ({periodChange > 0 ? '+' : ''}{periodChangePct}%)
+              </p>
+              <p className="text-[10px] text-[#9a9a9a]">
+                Zysk całk.: {latestData.profit > 0 ? '+' : ''}{latestData.profit.toLocaleString('pl-PL')} PLN
+              </p>
+            </div>
           </div>
         </div>
 
